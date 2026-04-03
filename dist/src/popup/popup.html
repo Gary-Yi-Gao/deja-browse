@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=400">
+  <title>Deja Browse</title>
+  <script type="module" crossorigin src="/assets/popup.html-XCX9RZUA.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/modulepreload-polyfill-B5Qt9EMX.js">
+  <link rel="stylesheet" crossorigin href="/assets/popup-CDvAHF_Z.css">
+</head>
+<body>
+  <div class="container">
+    <!-- 搜索视图 -->
+    <div id="view-search">
+      <header class="header">
+        <h1 class="logo">拾迹</h1>
+        <div class="header-actions">
+          <button id="btn-collect" class="collect-btn" title="收录当前页面">+ 收录</button>
+          <button id="btn-settings" class="icon-btn" title="设置">⚙</button>
+        </div>
+      </header>
+
+      <!-- 采集任务状态条 -->
+      <div id="activity-bar" class="activity-bar hidden">
+        <div class="activity-indicator">
+          <span class="activity-spinner"></span>
+          <span id="activity-text" class="activity-text"></span>
+        </div>
+        <span id="activity-count" class="activity-count"></span>
+      </div>
+
+      <div class="search-box">
+        <input type="text" id="search-input" placeholder="搜索浏览记忆…" autofocus>
+      </div>
+
+      <div id="results" class="results"></div>
+
+      <div id="empty-state" class="empty-state">
+        <p>输入关键词搜索你浏览过的网页</p>
+        <p class="hint">也可以在地址栏输入 <kbd>dj</kbd> + Tab 快速搜索</p>
+      </div>
+
+      <footer class="footer">
+        <span id="stats"></span>
+      </footer>
+    </div>
+
+    <!-- 快捷设置视图 -->
+    <div id="view-settings" class="view-hidden">
+      <header class="header">
+        <button id="btn-back" class="icon-btn" title="返回">&lt;</button>
+        <h1 class="logo">设置</h1>
+        <span style="width:32px"></span>
+      </header>
+
+      <div class="settings-panel">
+        <div class="setting-group">
+          <label class="setting-label">自动收录</label>
+          <div class="setting-toggle">
+            <button class="toggle-btn active" data-auto-collect="on">开启</button>
+            <button class="toggle-btn" data-auto-collect="off">关闭</button>
+          </div>
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label">收录模式</label>
+          <div class="setting-toggle">
+            <button class="toggle-btn active" data-mode="auto">浏览即收录</button>
+            <button class="toggle-btn" data-mode="manual">收藏时收录</button>
+          </div>
+          <div id="mode-hint" class="setting-hint"></div>
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label">LLM 供应商</label>
+          <div class="setting-toggle">
+            <button class="toggle-btn" data-provider="openai">OpenAI</button>
+            <button class="toggle-btn active" data-provider="zai">Z.ai</button>
+          </div>
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label">连接状态</label>
+          <div id="connection-status" class="connection-status">
+            <span class="status-dot"></span>
+            <span class="status-text">检查中…</span>
+          </div>
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label">数据统计</label>
+          <div id="settings-stats" class="settings-stats">加载中…</div>
+        </div>
+
+        <div class="setting-actions">
+          <button id="btn-open-options" class="action-btn primary">打开完整设置页</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

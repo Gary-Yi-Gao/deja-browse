@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>拾迹 - 设置</title>
+  <script type="module" crossorigin src="/assets/options.html-BOGMY7ZH.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/modulepreload-polyfill-B5Qt9EMX.js">
+  <link rel="modulepreload" crossorigin href="/assets/utils-BkZxnltF.js">
+  <link rel="stylesheet" crossorigin href="/assets/options-DNGhwb0V.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>拾迹 <span class="subtitle">Deja Browse</span></h1>
+      <p class="desc">智能浏览记忆设置</p>
+    </header>
+
+    <main class="main">
+      <!-- 自动收录 -->
+      <section class="card">
+        <h2>自动收录</h2>
+        <label class="toggle-label">
+          <input type="checkbox" id="auto-collect-enabled">
+          开启后按规则自动收录页面，关闭后仅支持手动收录
+        </label>
+      </section>
+
+      <!-- 收录模式 -->
+      <section class="card">
+        <h2>收录模式</h2>
+        <div class="radio-group">
+          <label class="radio-card">
+            <input type="radio" name="recordMode" value="auto">
+            <div class="radio-content">
+              <strong>浏览即收录</strong>
+              <p>自动采集浏览的每个网页（5 秒防抖）</p>
+            </div>
+          </label>
+          <label class="radio-card">
+            <input type="radio" name="recordMode" value="manual">
+            <div class="radio-content">
+              <strong>收藏时收录</strong>
+              <p>仅在手动点击收录或右键菜单时采集</p>
+            </div>
+          </label>
+        </div>
+      </section>
+
+      <!-- LLM 供应商 -->
+      <section class="card">
+        <h2>LLM 供应商</h2>
+        <div class="radio-group">
+          <label class="radio-card">
+            <input type="radio" name="provider" value="openai">
+            <div class="radio-content">
+              <strong>OpenAI (Codex)</strong>
+              <p>text-embedding-3-small / gpt-5.4</p>
+            </div>
+          </label>
+          <label class="radio-card">
+            <input type="radio" name="provider" value="zai">
+            <div class="radio-content">
+              <strong>Z.ai (智谱)</strong>
+              <p>embedding-3 / glm-5，支持 Coding Plan</p>
+            </div>
+          </label>
+        </div>
+      </section>
+
+      <!-- API 配置 -->
+      <section class="card" id="section-api">
+        <h2>API 配置</h2>
+
+        <div id="openai-config" class="provider-config">
+          <div class="form-group">
+            <label>API Key</label>
+            <input type="password" id="openai-apikey" placeholder="sk-...">
+          </div>
+          <div class="form-group">
+            <label>Base URL</label>
+            <input type="text" id="openai-baseurl" placeholder="https://api.openai.com/v1">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Embedding 模型</label>
+              <select id="openai-embedding-model">
+                <option value="text-embedding-3-small">text-embedding-3-small (1536维)</option>
+                <option value="text-embedding-3-large">text-embedding-3-large (3072维)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Chat 模型</label>
+              <select id="openai-chat-model">
+                <option value="gpt-5.4">gpt-5.4</option>
+                <option value="gpt-5.3-codex">gpt-5.3-codex</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div id="zai-config" class="provider-config">
+          <div class="form-group">
+            <label>API Key</label>
+            <input type="password" id="zai-apikey" placeholder="输入 Z.ai API Key">
+          </div>
+          <div class="form-group">
+            <label>套餐类型</label>
+            <div class="radio-group compact">
+              <label class="radio-inline">
+                <input type="radio" name="zai-plan" value="payg">
+                按量计费
+              </label>
+              <label class="radio-inline">
+                <input type="radio" name="zai-plan" value="coding">
+                Coding Plan
+              </label>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Embedding 模型</label>
+              <select id="zai-embedding-model">
+                <option value="embedding-3">embedding-3 (1024维)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Chat 模型</label>
+              <select id="zai-chat-model">
+                <option value="glm-5">glm-5</option>
+                <option value="glm-4.5">glm-4.5</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <button id="btn-test" class="btn btn-secondary">测试连接</button>
+        <div id="test-result" class="test-result"></div>
+      </section>
+
+      <!-- 黑名单域名 -->
+      <section class="card">
+        <h2>黑名单域名</h2>
+        <p class="card-desc">以下域名将不会被采集</p>
+
+        <div class="form-group">
+          <label class="toggle-label">
+            <input type="checkbox" id="builtin-enabled">
+            启用内置敏感域名过滤（银行、医疗、政务等）
+          </label>
+        </div>
+
+        <details class="builtin-list">
+          <summary>查看内置列表</summary>
+          <pre id="builtin-domains"></pre>
+        </details>
+
+        <div class="form-group">
+          <label>自定义黑名单</label>
+          <div class="input-row">
+            <input type="text" id="blacklist-input" placeholder="*.example.com">
+            <button id="btn-add-blacklist" class="btn btn-small">添加</button>
+          </div>
+          <p class="form-hint">支持通配符，如 *.example.com</p>
+        </div>
+
+        <ul id="custom-blacklist" class="tag-list"></ul>
+      </section>
+
+      <!-- 高级设置 -->
+      <section class="card">
+        <h2>高级设置</h2>
+        <div class="form-group">
+          <label>最大采集字数</label>
+          <input type="number" id="max-content-length" min="500" max="10000" step="500">
+        </div>
+      </section>
+
+      <!-- 数据管理 -->
+      <section class="card">
+        <h2>数据管理</h2>
+        <div id="data-stats" class="data-stats"></div>
+        <div class="btn-group">
+          <button id="btn-export-sqlite" class="btn btn-secondary">导出 .sqlite3</button>
+          <button id="btn-export-json" class="btn btn-secondary">导出 JSON</button>
+          <button id="btn-import" class="btn btn-secondary">导入数据</button>
+          <input type="file" id="import-file" accept=".sqlite3,.json" hidden>
+        </div>
+        <div id="import-result" class="test-result"></div>
+      </section>
+    </main>
+
+    <footer class="save-bar">
+      <button id="btn-save" class="btn btn-primary">保存设置</button>
+      <span id="save-status"></span>
+    </footer>
+  </div>
+
+</body>
+</html>
