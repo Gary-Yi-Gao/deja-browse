@@ -2,8 +2,8 @@ import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
 
 const DB_NAME = 'deja-browse.sqlite3';
 const SQLITE_WASM_URL = `${self.location.origin}/vendor/sqlite3.wasm`;
-
 let db = null;
+let sqlite3Api = null;
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS pages (
@@ -46,6 +46,7 @@ async function initDb() {
     }
   }
   if (!sqlite3) throw initErr || new Error('sqlite init failed');
+  sqlite3Api = sqlite3;
 
   if (sqlite3.installOpfsSAHPoolVfs) {
     try {
@@ -101,6 +102,7 @@ async function loadSqliteWasmBinary() {
   }
   return bytes;
 }
+
 
 function insertPage(page) {
   const vec = page.vector ? new Float32Array(page.vector) : null;
@@ -251,33 +253,46 @@ function getStats() {
 }
 
 function exportDatabase() {
-  const bytes = db.sqlite3.capi.sqlite3_js_db_export(db.pointer);
+  const bytes = sqlite3Api.capi.sqlite3_js_db_export(db.pointer);
   return Array.from(bytes);
 }
 
-function importDatabase(bytes, format, strategy) {
+async function importDatabase(bytes, format, strategy) {
+  const bin = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+
   if (format === 'sqlite') {
-    db.close();
-    db = null;
-    // Re-init with imported data will be handled by re-creating the db
-    // For now, we export/re-import by re-initializing
-    return initDb().then(() => {
-      db.exec('DELETE FROM pages');
-      // Load the imported database
-      const importDb = new db.sqlite3.oo1.DB();
-      importDb.onclose = { after: () => {} };
-      const rc = db.sqlite3.capi.sqlite3_deserialize(
-        importDb.pointer, 'main', bytes, bytes.byteLength, bytes.byteLength,
-        0,
+    if (bin.length < 16) {
+      throw new Error('导入文件太小，不是有效的 SQLite 数据库');
+    }
+    const header = String.fromCharCode(...bin.slice(0, 15));
+    if (header !== 'SQLite format 3') {
+      throw new Error('导入文件不是有效的 SQLite 数据库');
+    }
+
+    const n = bin.byteLength;
+    const pData = sqlite3Api.capi.sqlite3_malloc(n);
+    if (!pData) throw new Error('sqlite3_malloc failed');
+    sqlite3Api.wasm.heap8u().set(bin, pData);
+
+    const importDb = new sqlite3Api.oo1.DB(':memory:');
+    try {
+      const SQLITE_DESERIALIZE_FREEONCLOSE = 1;
+      const SQLITE_DESERIALIZE_RESIZEABLE = 2;
+      const rc = sqlite3Api.capi.sqlite3_deserialize(
+        importDb.pointer, 'main', pData, n, n,
+        SQLITE_DESERIALIZE_FREEONCLOSE | SQLITE_DESERIALIZE_RESIZEABLE,
       );
-      if (rc !== 0) throw new Error('Failed to deserialize database');
+      if (rc !== 0) throw new Error(`sqlite3_deserialize failed (rc=${rc})`);
 
       const rows = [];
       importDb.exec({
         sql: 'SELECT url, title, summary, keywords, content_snippet, vector, vector_norm, embedding_dim, provider, created_at, updated_at FROM pages',
         callback: (row) => rows.push(row),
       });
-      importDb.close();
+
+      if (strategy === 'overwrite') {
+        db.exec('DELETE FROM pages');
+      }
 
       db.exec('BEGIN TRANSACTION');
       try {
@@ -294,11 +309,13 @@ function importDatabase(bytes, format, strategy) {
       }
 
       return { ok: true, count: rows.length };
-    });
+    } finally {
+      try { importDb.close(); } catch { /* ignore */ }
+    }
   }
 
   // JSON format
-  const data = JSON.parse(new TextDecoder().decode(bytes));
+  const data = JSON.parse(new TextDecoder().decode(bin));
   if (!Array.isArray(data)) throw new Error('Invalid JSON format');
 
   if (strategy === 'overwrite') {
