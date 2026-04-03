@@ -82,6 +82,15 @@ const BUILTIN_BLACKLIST = [
   '*.1password.com', '*.lastpass.com', '*.bitwarden.com',
   'chrome://*', 'chrome-extension://*', 'about:*',
   'localhost', '127.0.0.1',
+  'www.google.com', 'www.google.com.*', 'google.com',
+  'www.bing.com', 'cn.bing.com', 'bing.com',
+  'www.baidu.com', 'baidu.com', 'm.baidu.com',
+  'search.yahoo.com', 'yahoo.com',
+  'duckduckgo.com',
+  'www.sogou.com', 'sogou.com',
+  'www.so.com', 'so.com',
+  'yandex.com', 'yandex.ru',
+  'search.naver.com',
 ];
 
 export { BUILTIN_BLACKLIST };

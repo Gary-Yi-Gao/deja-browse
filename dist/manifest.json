@@ -23,7 +23,7 @@
   "content_scripts": [
     {
       "js": [
-        "assets/content-script.js-loader-BRkBsKiE.js"
+        "assets/content-script.js-loader-CjLOTq9b.js"
       ],
       "matches": [
         "http://*/*",
@@ -60,9 +60,9 @@
       ],
       "resources": [
         "vendor/vite-client.js",
-        "assets/utils-BkZxnltF.js",
+        "assets/utils-BC3aARNB.js",
         "assets/extractor-Dxev3TWY.js",
-        "assets/content-script.js-qISz3hXD.js"
+        "assets/content-script.js-CT_WoL1r.js"
       ],
       "use_dynamic_url": false
     }
