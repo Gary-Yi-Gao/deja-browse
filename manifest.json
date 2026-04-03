@@ -1,0 +1,57 @@
+{
+  "manifest_version": 3,
+  "name": "Deja Browse (拾迹)",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqOfdPktjx3KKWu024zaGCFRjhLPcpWT+ATMMJsooo1qiPcZZt2nSOPoxfjF/xWGgsScEDV0SY/+vPn+BSaE/JXgxFURWw88iRoPUsCtZe/6PB6FcsA5L8HW+7KDvIjKZtmzzjwFNFiqZIbLajvoHJCea2G6ssG9HNdSQdZ4Y3zoJPEXrY2sng8/1mxpKuN3/0rsjjoInYgc69EPgIEt/44xGlEELV7gmBRQC9Dd8DLB9UKAtuoYCa3MolKe7UjWW0AT8ntNP21oOlojxMK3FW7uZAy+/G27c0s0hdrauw1J/Vft/7eDpV8+/Nfhz5VPXNIox+w/w7vQ/o3URyOzR3QIDAQAB",
+  "version": "0.1.0",
+  "description": "智能浏览记忆 — 自动采集网页内容，语义搜索找回历史页面",
+  "permissions": [
+    "storage",
+    "offscreen",
+    "tabs",
+    "contextMenus",
+    "downloads",
+    "alarms",
+    "scripting"
+  ],
+  "omnibox": {
+    "keyword": "dj"
+  },
+  "background": {
+    "service_worker": "src/background/service-worker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["src/content/content-script.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_icon": {
+      "16": "assets/icons/icon-16.png",
+      "48": "assets/icons/icon-48.png",
+      "128": "assets/icons/icon-128.png"
+    }
+  },
+  "options_ui": {
+    "page": "src/options/options.html",
+    "open_in_tab": true
+  },
+  "icons": {
+    "16": "assets/icons/icon-16.png",
+    "48": "assets/icons/icon-48.png",
+    "128": "assets/icons/icon-128.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["vendor/vite-client.js"],
+      "matches": ["http://*/*", "https://*/*"]
+    }
+  ],
+  "incognito": "spanning"
+}
