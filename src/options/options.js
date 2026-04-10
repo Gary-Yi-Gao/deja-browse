@@ -304,8 +304,25 @@ importFile.addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
 
-  const strategy = confirm('选择导入策略：\n确定 = 合并（保留现有数据）\n取消 = 覆盖（替换所有数据）')
-    ? 'merge' : 'overwrite';
+  const wantMerge = confirm(
+    '请选择导入策略：\n\n'
+    + '【确定】= 合并模式（保留现有数据，仅添加新页面）\n'
+    + '【取消】= 取消导入',
+  );
+
+  if (!wantMerge) {
+    const wantOverwrite = confirm(
+      '⚠️ 是否使用覆盖模式？\n\n'
+      + '覆盖模式会删除当前所有已收录的数据，替换为导入文件中的内容。\n\n'
+      + '此操作不可撤销，确定要继续吗？',
+    );
+    if (!wantOverwrite) {
+      importFile.value = '';
+      return;
+    }
+  }
+
+  const strategy = wantMerge ? 'merge' : 'overwrite';
 
   setButtonLoading(btnImport, true, '正在导入…');
   importResult.style.display = 'none';
@@ -324,7 +341,7 @@ importFile.addEventListener('change', async (e) => {
     });
 
     importResult.className = 'test-result success';
-    importResult.textContent = `导入成功！共 ${result?.count || 0} 条收录`;
+    importResult.textContent = `导入成功！共 ${result?.count || 0} 条收录（${strategy === 'merge' ? '合并' : '覆盖'}模式）`;
     importResult.style.display = 'block';
     loadStats();
   } catch (err) {
@@ -344,7 +361,11 @@ async function loadStats() {
     try {
       const stats = await chrome.runtime.sendMessage({ type: 'GET_STATS' });
       if (stats) {
-        dataStats.textContent = `已收录 ${stats.totalPages} 个页面，其中 ${stats.withVector} 个已向量化`;
+        let text = `已收录 ${stats.totalPages} 个页面，其中 ${stats.withVector} 个已向量化`;
+        if (stats.persistent === false) {
+          text += '\n⚠ 存储异常：数据库运行在临时模式，数据可能不完整。请刷新页面重试。';
+        }
+        dataStats.textContent = text;
         return;
       }
     } catch { /* retry */ }

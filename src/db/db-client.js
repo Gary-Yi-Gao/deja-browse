@@ -94,7 +94,7 @@ function waitForOffscreenReady() {
 
 async function resetOffscreenDocument() {
   const now = Date.now();
-  if (now - lastResetAt < 1000) return;
+  if (now - lastResetAt < 2000) return;
   lastResetAt = now;
   offscreenReady = false;
   offscreenCreating = null;
@@ -103,6 +103,8 @@ async function resetOffscreenDocument() {
   } catch {
     // ignore: no offscreen or close unsupported in current state
   }
+  // Wait for the old Worker to release OPFS file locks before creating a new one
+  await new Promise(r => setTimeout(r, 500));
 }
 
 function getActionTimeout(action) {
@@ -153,6 +155,7 @@ async function sendToOffscreen(action, payload) {
         || msg.includes('sqlite wasm is empty')
         || msg.includes('sqlite wasm bytes empty')
         || msg.includes('sqlite wasm fetch failed')
+        || msg.includes('OPFS Pool VFS init failed')
       );
       if (!recoverable || attempt === 1) throw e;
       await resetOffscreenDocument();

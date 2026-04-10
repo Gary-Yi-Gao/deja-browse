@@ -250,7 +250,11 @@ async function loadSettingsStats() {
     try {
       const stats = await sendMsg({ type: 'GET_STATS' }, 15000);
       if (stats) {
-        settingsStats.textContent = `已收录 ${stats.totalPages} 个页面，其中 ${stats.withVector} 个已向量化`;
+        let text = `已收录 ${stats.totalPages} 个页面，其中 ${stats.withVector} 个已向量化`;
+        if (stats.persistent === false) {
+          text += ' ⚠ 存储异常：当前为临时模式，数据可能不完整，请刷新重试';
+        }
+        settingsStats.textContent = text;
         return;
       }
     } catch { /* retry */ }
@@ -355,7 +359,11 @@ async function loadStats() {
     try {
       const stats = await sendMsg({ type: 'GET_STATS' }, 15000);
       if (stats) {
-        statsEl.textContent = `已收录 ${stats.totalPages} 个页面`;
+        let text = `已收录 ${stats.totalPages} 个页面`;
+        if (stats.persistent === false) {
+          text += ' ⚠ 存储异常';
+        }
+        statsEl.textContent = text;
         return;
       }
     } catch { /* retry */ }

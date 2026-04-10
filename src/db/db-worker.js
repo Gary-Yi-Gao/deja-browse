@@ -2,8 +2,13 @@ import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
 
 const DB_NAME = 'deja-browse.sqlite3';
 const SQLITE_WASM_URL = `${self.location.origin}/vendor/sqlite3.wasm`;
+const POOL_VFS_NAME = 'opfs-deja';
+const DB_LOCK_NAME = 'deja-browse-db-init';
+const POOL_VFS_MAX_RETRIES = 3;
+
 let db = null;
 let sqlite3Api = null;
+let usesPoolVfs = false;
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS pages (
@@ -24,71 +29,102 @@ CREATE INDEX IF NOT EXISTS idx_pages_created ON pages(created_at DESC);
 `;
 
 async function initDb() {
-  let sqlite3 = null;
-  let initErr = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  const doInit = async () => {
+    let sqlite3 = null;
+    let initErr = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const wasmBinary = await loadSqliteWasmBinary();
+        sqlite3 = await sqlite3InitModule({
+          print: console.log,
+          printErr: console.error,
+          locateFile: (name) => (name.endsWith('.wasm') ? SQLITE_WASM_URL : name),
+          wasmBinary,
+        });
+        initErr = null;
+        break;
+      } catch (e) {
+        initErr = e;
+        const msg = String(e?.message || e);
+        const retryable = msg.includes('CompileError') || msg.includes('BufferSource argument is empty');
+        if (!retryable || attempt === 2) break;
+        console.warn(`[DB Worker] WASM init attempt ${attempt + 1} failed:`, msg);
+        await new Promise(r => setTimeout(r, 400 * (attempt + 1)));
+      }
+    }
+    if (!sqlite3) throw initErr || new Error('sqlite init failed');
+    sqlite3Api = sqlite3;
+
+    usesPoolVfs = false;
+
+    if (sqlite3.installOpfsSAHPoolVfs) {
+      let poolErr = null;
+      for (let attempt = 0; attempt < POOL_VFS_MAX_RETRIES; attempt++) {
+        try {
+          console.log(`[DB Worker] Pool VFS init attempt ${attempt + 1}/${POOL_VFS_MAX_RETRIES}...`);
+          const poolVfs = await sqlite3.installOpfsSAHPoolVfs({
+            name: POOL_VFS_NAME,
+            initialCapacity: 6,
+            clearOnInit: false,
+          });
+          db = new poolVfs.OpfsSAHPoolDb(`/${DB_NAME}`);
+          usesPoolVfs = true;
+          poolErr = null;
+          console.log('[DB Worker] Pool VFS init OK — persistent storage active');
+          break;
+        } catch (e) {
+          poolErr = e;
+          console.warn(`[DB Worker] Pool VFS attempt ${attempt + 1} failed:`, e?.message || e);
+          if (attempt < POOL_VFS_MAX_RETRIES - 1) {
+            await new Promise(r => setTimeout(r, 400 * (attempt + 1)));
+          }
+        }
+      }
+      if (!usesPoolVfs) {
+        throw new Error(
+          `OPFS Pool VFS init failed after ${POOL_VFS_MAX_RETRIES} attempts: ${poolErr?.message || poolErr}`,
+        );
+      }
+    } else {
+      throw new Error('installOpfsSAHPoolVfs is not available — persistent storage requires OPFS support');
+    }
+
+    db.exec('PRAGMA journal_mode=WAL');
+    db.exec(SCHEMA_SQL);
+
     try {
-      const wasmBinary = await loadSqliteWasmBinary();
-      sqlite3 = await sqlite3InitModule({
-        print: console.log,
-        printErr: console.error,
-        locateFile: (name) => (name.endsWith('.wasm') ? SQLITE_WASM_URL : name),
-        wasmBinary,
-      });
-      initErr = null;
-      break;
+      db.exec(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS pages_fts USING fts5(
+          url, title, keywords, content_snippet,
+          content='pages', content_rowid='rowid',
+          tokenize='unicode61'
+        );
+        CREATE TRIGGER IF NOT EXISTS pages_ai AFTER INSERT ON pages BEGIN
+          INSERT INTO pages_fts(rowid, url, title, keywords, content_snippet)
+          VALUES (new.rowid, new.url, new.title, new.keywords, new.content_snippet);
+        END;
+        CREATE TRIGGER IF NOT EXISTS pages_ad AFTER DELETE ON pages BEGIN
+          INSERT INTO pages_fts(pages_fts, rowid, url, title, keywords, content_snippet)
+          VALUES ('delete', old.rowid, old.url, old.title, old.keywords, old.content_snippet);
+        END;
+        CREATE TRIGGER IF NOT EXISTS pages_au AFTER UPDATE ON pages BEGIN
+          INSERT INTO pages_fts(pages_fts, rowid, url, title, keywords, content_snippet)
+          VALUES ('delete', old.rowid, old.url, old.title, old.keywords, old.content_snippet);
+          INSERT INTO pages_fts(rowid, url, title, keywords, content_snippet)
+          VALUES (new.rowid, new.url, new.title, new.keywords, new.content_snippet);
+        END;
+      `);
     } catch (e) {
-      initErr = e;
-      const msg = String(e?.message || e);
-      const retryable = msg.includes('CompileError') || msg.includes('BufferSource argument is empty');
-      if (!retryable || attempt === 2) break;
-      await new Promise(r => setTimeout(r, 400 * (attempt + 1)));
+      console.warn('[DB Worker] FTS5 setup warning:', e.message);
     }
+
+    return { ok: true, persistent: usesPoolVfs };
+  };
+
+  if (typeof navigator !== 'undefined' && navigator.locks) {
+    return navigator.locks.request(DB_LOCK_NAME, doInit);
   }
-  if (!sqlite3) throw initErr || new Error('sqlite init failed');
-  sqlite3Api = sqlite3;
-
-  if (sqlite3.installOpfsSAHPoolVfs) {
-    try {
-      const poolVfs = await sqlite3.installOpfsSAHPoolVfs({ name: 'opfs-deja', initialCapacity: 6 });
-      db = new poolVfs.OpfsSAHPoolDb(`/${DB_NAME}`);
-    } catch {
-      db = new sqlite3.oo1.DB(`/${DB_NAME}`, 'ct');
-    }
-  } else {
-    db = new sqlite3.oo1.DB(`/${DB_NAME}`, 'ct');
-  }
-
-  db.exec('PRAGMA journal_mode=WAL');
-  db.exec(SCHEMA_SQL);
-
-  try {
-    db.exec(`
-      CREATE VIRTUAL TABLE IF NOT EXISTS pages_fts USING fts5(
-        url, title, keywords, content_snippet,
-        content='pages', content_rowid='rowid',
-        tokenize='unicode61'
-      );
-      CREATE TRIGGER IF NOT EXISTS pages_ai AFTER INSERT ON pages BEGIN
-        INSERT INTO pages_fts(rowid, url, title, keywords, content_snippet)
-        VALUES (new.rowid, new.url, new.title, new.keywords, new.content_snippet);
-      END;
-      CREATE TRIGGER IF NOT EXISTS pages_ad AFTER DELETE ON pages BEGIN
-        INSERT INTO pages_fts(pages_fts, rowid, url, title, keywords, content_snippet)
-        VALUES ('delete', old.rowid, old.url, old.title, old.keywords, old.content_snippet);
-      END;
-      CREATE TRIGGER IF NOT EXISTS pages_au AFTER UPDATE ON pages BEGIN
-        INSERT INTO pages_fts(pages_fts, rowid, url, title, keywords, content_snippet)
-        VALUES ('delete', old.rowid, old.url, old.title, old.keywords, old.content_snippet);
-        INSERT INTO pages_fts(rowid, url, title, keywords, content_snippet)
-        VALUES (new.rowid, new.url, new.title, new.keywords, new.content_snippet);
-      END;
-    `);
-  } catch (e) {
-    console.warn('FTS5 setup warning:', e.message);
-  }
-
-  return { ok: true };
+  return doInit();
 }
 
 async function loadSqliteWasmBinary() {
@@ -249,7 +285,7 @@ function getStats() {
     callback: (row) => { providers[row[0] || 'none'] = row[1]; },
   });
 
-  return { totalPages, withVector, providers };
+  return { totalPages, withVector, providers, persistent: usesPoolVfs };
 }
 
 function exportDatabase() {
@@ -258,6 +294,7 @@ function exportDatabase() {
 }
 
 async function importDatabase(bytes, format, strategy) {
+  console.log(`[DB Worker] importDatabase: format=${format}, strategy=${strategy}, size=${bytes?.length || 0}`);
   const bin = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
 
   if (format === 'sqlite') {
@@ -285,10 +322,18 @@ async function importDatabase(bytes, format, strategy) {
       if (rc !== 0) throw new Error(`sqlite3_deserialize failed (rc=${rc})`);
 
       const rows = [];
-      importDb.exec({
-        sql: 'SELECT url, title, summary, keywords, content_snippet, vector, vector_norm, embedding_dim, provider, created_at, updated_at FROM pages',
-        callback: (row) => rows.push(row),
-      });
+      try {
+        importDb.exec({
+          sql: 'SELECT url, title, summary, keywords, content_snippet, vector, vector_norm, embedding_dim, provider, created_at, updated_at FROM pages',
+          callback: (row) => rows.push(row),
+        });
+      } catch (readErr) {
+        throw new Error(`导入文件中无法读取 pages 表: ${readErr.message}`);
+      }
+
+      if (strategy === 'overwrite' && rows.length === 0) {
+        throw new Error('导入文件中 pages 表为空，已取消覆盖操作以保护现有数据');
+      }
 
       if (strategy === 'overwrite') {
         db.exec('DELETE FROM pages');
@@ -308,6 +353,7 @@ async function importDatabase(bytes, format, strategy) {
         throw e;
       }
 
+      console.log(`[DB Worker] sqlite import done: ${rows.length} rows, strategy=${strategy}`);
       return { ok: true, count: rows.length };
     } finally {
       try { importDb.close(); } catch { /* ignore */ }
@@ -317,6 +363,10 @@ async function importDatabase(bytes, format, strategy) {
   // JSON format
   const data = JSON.parse(new TextDecoder().decode(bin));
   if (!Array.isArray(data)) throw new Error('Invalid JSON format');
+
+  if (strategy === 'overwrite' && data.length === 0) {
+    throw new Error('导入 JSON 数据为空数组，已取消覆盖操作以保护现有数据');
+  }
 
   if (strategy === 'overwrite') {
     db.exec('DELETE FROM pages');
@@ -357,6 +407,7 @@ async function importDatabase(bytes, format, strategy) {
     throw e;
   }
 
+  console.log(`[DB Worker] json import done: ${count} rows, strategy=${strategy}`);
   return { ok: true, count };
 }
 
